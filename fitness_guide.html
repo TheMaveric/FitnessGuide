@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beginner Fitness Guide for Kush</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        setLogLevel('Debug');
+        window.firebase = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, getDoc, setDoc, onSnapshot, setLogLevel };
+    </script>
+    <!-- Chosen Palette: Warm Neutrals with Red/Orange Accents -->
+    <!-- Application Structure Plan: A single-page application with a fixed sidebar navigation for desktop and a bottom bar for mobile. This task-oriented structure (Dashboard, Workouts, Exercises, Nutrition, Tracker) is chosen over the original linear format for superior usability. It allows the user to instantly access any section without scrolling. The dashboard provides a daily "at-a-ance" view, while dedicated sections allow for focused exploration of specific information, making the guide an active tool rather than a static document. -->
+    <!-- Visualization & Content Choices: 
+        - Workout Schedule -> Goal: Organize/Inform -> Viz: Interactive Grid of Cards -> Interaction: Click to show daily exercises. Justification: Focuses user on one day at a time, reducing cognitive load. Method: HTML/JS.
+        - Nutrition Macros -> Goal: Inform/Compare -> Viz: Donut Chart -> Interaction: Hover for tooltips. Justification: Provides an immediate visual understanding of macronutrient proportions. Library: Chart.js (Canvas).
+        - Exercise Library -> Goal: Educate -> Viz: Master-Detail Layout -> Interaction: Click list item to display details. Justification: Efficiently browse and compare exercise techniques without leaving the page. Method: HTML/JS.
+        - Trackers -> Goal: Organize/Record -> Viz: Standard HTML Tables with Inputs -> Interaction: User enters data and saves to Firestore. Justification: Makes the tracker functional and allows for persistent data storage. Method: HTML/JS/Firestore.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .nav-item.active {
+            background-color: #EF4444;
+            color: white;
+        }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .success-message {
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .success-message.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="flex flex-col md:flex-row min-h-screen">
+        
+        <nav class="hidden md:block md:w-64 bg-white p-4 shadow-lg flex-shrink-0">
+            <h1 class="text-2xl font-bold text-red-500 mb-8">📘 Fitness Guide</h1>
+            <ul class="space-y-2" id="desktop-nav">
+                <li><a href="#dashboard" class="nav-item flex items-center p-3 rounded-lg hover:bg-gray-200 transition-colors" data-page="dashboard">🏠 Dashboard</a></li>
+                <li><a href="#schedule" class="nav-item flex items-center p-3 rounded-lg hover:bg-gray-200 transition-colors" data-page="schedule">🗓️ Workout Plan</a></li>
+                <li><a href="#exercises" class="nav-item flex items-center p-3 rounded-lg hover:bg-gray-200 transition-colors" data-page="exercises">🤸 Exercise Library</a></li>
+                <li><a href="#nutrition" class="nav-item flex items-center p-3 rounded-lg hover:bg-gray-200 transition-colors" data-page="nutrition">🍎 Nutrition</a></li>
+                <li><a href="#trackers" class="nav-item flex items-center p-3 rounded-lg hover:bg-gray-200 transition-colors" data-page="trackers">📊 Trackers</a></li>
+            </ul>
+        </nav>
+
+        <main class="flex-1 p-4 sm:p-6 lg:p-8">
+            <section id="dashboard" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">Welcome, Kush!</h2>
+                <p class="text-lg text-gray-600 mb-6">Ready to get stronger today? Let's get started.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-bold mb-4" id="today-title">Today's Focus</h3>
+                        <ul id="today-workout-list" class="space-y-2 text-gray-700"></ul>
+                    </div>
+                    <div class="bg-red-500 text-white p-6 rounded-lg shadow-md flex flex-col justify-center items-center">
+                        <p class="text-2xl font-semibold text-center">“You don’t have to be great to start, but you have to start to be great.”</p>
+                    </div>
+                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-md mt-6">
+                    <h3 class="text-xl font-bold mb-4">🔥 Quick Warm-Up (5-10 min)</h3>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><b>Jumping Jacks:</b> 2 sets of 30 seconds</li>
+                        <li><b>Skipping Rope:</b> 2–3 minutes</li>
+                        <li><b>Dumbbell Farmer’s Walk:</b> 2 sets of 20–30 meters</li>
+                    </ul>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                     <div class="bg-white p-6 rounded-lg shadow-md" id="last-workout-summary">
+                         <h3 class="text-xl font-bold mb-4">📝 Last Workout Summary</h3>
+                         <p class="text-gray-500 text-sm">Log your first workout to see a summary here.</p>
+                     </div>
+                     <div class="bg-white p-6 rounded-lg shadow-md" id="monthly-progress-summary">
+                         <h3 class="text-xl font-bold mb-4">📈 Monthly Progress</h3>
+                         <p class="text-gray-500 text-sm">Enter your monthly stats to see them here.</p>
+                     </div>
+                </div>
+
+            </section>
+
+            <section id="schedule" class="content-section">
+                 <h2 class="text-3xl font-bold mb-2">6-Day Workout Plan</h2>
+                 <p class="text-lg text-gray-600 mb-6">This section outlines your weekly training split. Each day targets different muscle groups or fitness goals. Click on any day to see the detailed workout. Consistency is key, so stick to the plan as best you can.</p>
+                 <div id="workout-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                 </div>
+            </section>
+
+            <section id="exercises" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">Exercise Library</h2>
+                <p class="text-lg text-gray-600 mb-6">Here you can find detailed instructions for every exercise in your plan. Proper form is crucial for preventing injury and maximizing results. Select an exercise from the list to learn more about its execution, target muscles, and common mistakes to avoid.</p>
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="md:w-1/3">
+                        <div class="bg-white p-4 rounded-lg shadow-md">
+                            <h3 class="font-bold mb-2">Select an Exercise:</h3>
+                            <ul id="exercise-list" class="space-y-1"></ul>
+                        </div>
+                    </div>
+                    <div id="exercise-details" class="md:w-2/3 bg-white p-6 rounded-lg shadow-md">
+                        <p class="text-gray-500">Select an exercise from the list to see details here.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="nutrition" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">Fueling Your Body</h2>
+                <p class="text-lg text-gray-600 mb-6">Nutrition is just as important as your training. What you eat provides the energy for your workouts and the building blocks for muscle growth and recovery. This section covers the fundamentals of macros, supplements, and a sample meal plan to guide you.</p>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="mb-4 border-b border-gray-200">
+                        <nav class="flex space-x-4" id="nutrition-tabs">
+                            <button data-tab="basics" class="nutrition-tab py-2 px-4 font-semibold border-b-2 border-red-500 text-red-500">Basics</button>
+                            <button data-tab="supplements" class="nutrition-tab py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:border-gray-300">Supplements</button>
+                            <button data-tab="mealplan" class="nutrition-tab py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:border-gray-300">Meal Plan</button>
+                        </nav>
+                    </div>
+                    <div id="nutrition-content"></div>
+                </div>
+            </section>
+
+            <section id="trackers" class="content-section">
+                <h2 class="text-3xl font-bold mb-2">Progress Trackers</h2>
+                <p class="text-lg text-gray-600 mb-6">Tracking your progress is essential for staying motivated and making informed adjustments to your plan. Use the weekly tracker to log your workouts and the monthly tracker to monitor changes in your body composition and strength over time.</p>
+                
+                <div class="mb-4 bg-white p-4 rounded-lg shadow-md">
+                    <p class="text-sm">Your User ID: <span id="user-id" class="font-mono text-gray-500">Loading...</span> <button id="copy-user-id" class="ml-2 text-sm text-red-500 hover:text-red-700">Copy</button></p>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+                        <h3 class="text-xl font-bold mb-4">Weekly Workout Tracker</h3>
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="p-2">Exercise</th><th class="p-2">Sets</th><th class="p-2">Reps</th><th class="p-2">Weight (kg)</th><th class="p-2">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="weekly-tracker-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+                        <h3 class="text-xl font-bold mb-4">Monthly Progress Tracker</h3>
+                        <table class="w-full text-left">
+                           <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="p-2">Metric</th><th class="p-2">Month 1</th><th class="p-2">Month 2</th><th class="p-2">Month 3</th>
+                                </tr>
+                           </thead>
+                           <tbody id="monthly-tracker-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="mt-8 flex justify-end items-center space-x-4">
+                    <p id="save-message" class="text-sm font-semibold text-green-600 success-message">Progress saved!</p>
+                    <button id="save-button" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition-colors">Save Progress</button>
+                </div>
+            </section>
+        </main>
+        
+        <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white shadow-t-lg z-10">
+            <ul class="flex justify-around" id="mobile-nav">
+                <li><a href="#dashboard" class="nav-item flex justify-center p-3" data-page="dashboard">🏠</a></li>
+                <li><a href="#schedule" class="nav-item flex justify-center p-3" data-page="schedule">🗓️</a></li>
+                <li><a href="#exercises" class="nav-item flex justify-center p-3" data-page="exercises">🤸</a></li>
+                <li><a href="#nutrition" class="nav-item flex justify-center p-3" data-page="nutrition">🍎</a></li>
+                <li><a href="#trackers" class="nav-item flex justify-center p-3" data-page="trackers">📊</a></li>
+            </ul>
+        </nav>
+
+    </div>
+
+<script type="module">
+document.addEventListener('DOMContentLoaded', async () => {
+
+    const appData = {
+        schedule: [
+            { day: 1, title: "Push", subtitle: "Chest, Shoulders, Triceps", exercises: ["Push-Ups", "Dumbbell Shoulder Press", "Chest Press", "Tricep Dips"] },
+            { day: 2, title: "Cardio & Core", subtitle: "", exercises: ["Jump Rope", "Plank", "Side Plank", "Glute Bridge"] },
+            { day: 3, title: "Pull + Legs", subtitle: "", exercises: ["Dumbbell Deadlifts", "Bodyweight Squats", "Step-Ups", "Dumbbell Rows"] },
+            { day: 4, title: "Active Recovery", subtitle: "20-30 min", exercises: ["Light Jogging", "Yoga", "Stretching"] },
+            { day: 5, title: "Lower Body Strength", subtitle: "", exercises: ["Deadlifts", "Forward Lunges", "Bulgarian Split Squats", "Standing Calf Raises"] },
+            { day: 6, title: "HIIT & Conditioning", subtitle: "", exercises: ["Sprints", "Burpees", "Jump Squats", "Kettlebell Swings"] },
+            { day: 7, title: "Rest", subtitle: "Recovery is key", exercises: ["Optional light stretching or walk"] }
+        ],
+        exercises: {
+            "Push-Ups": {
+                description: "A classic bodyweight exercise that builds strength in your chest, shoulders, and triceps.",
+                form: ["Core tight: Keep your abs braced to prevent your hips from sagging.", "Head neutral: Gaze slightly forward to keep your neck aligned with your spine.", "Elbows at 45°: Angle your elbows slightly back, not flared out to the sides."],
+                muscles: { primary: "Chest, Shoulders, Triceps", secondary: "Core, Traps" },
+                mistakes: ["Hips Sagging: This puts strain on your lower back.", "Flared Elbows: Can lead to shoulder injury.", "Incomplete Range of Motion: Don't stop halfway; go all the way down."]
+            },
+            "Dumbbell Shoulder Press": {
+                description: "Builds shoulder strength and size. Can be done seated or standing.",
+                form: ["Back straight, core engaged.", "Start with dumbbells at shoulder height, palms facing forward.", "Press overhead until arms are fully extended."],
+                muscles: { primary: "Shoulders (Deltoids)", secondary: "Triceps" },
+                mistakes: ["Arching the lower back excessively.", "Not using a full range of motion."]
+            },
+            "Chest Press": {
+                description: "A fundamental upper body strength exercise that targets the pectoral muscles.",
+                form: ["Lie flat on a bench, feet firmly on the ground.", "Grip the dumbbells or bar just wider than shoulder-width.", "Lower the weight to your chest, then press back up forcefully."],
+                muscles: { primary: "Chest (Pectorals)", secondary: "Shoulders, Triceps" },
+                mistakes: ["Bouncing the weight off your chest.", "Flaring elbows too wide."]
+            },
+            "Tricep Dips": {
+                description: "An effective bodyweight exercise for targeting the triceps, using a bench or chair.",
+                form: ["Place hands on the edge of a bench, fingers forward.", "Extend legs out, the further out the harder it is.", "Lower your body until your elbows are at a 90-degree angle, then push back up."],
+                muscles: { primary: "Triceps", secondary: "Chest, Shoulders" },
+                mistakes: ["Going too low, which can strain the shoulders.", "Shoulders rolling forward."]
+            },
+            "Jump Rope": { description: "Excellent for cardiovascular health, coordination, and calorie burning.", form: [], muscles: { primary: "Full Body", secondary: "" }, mistakes: []},
+            "Plank": { description: "A core exercise that strengthens your abs, back, and shoulders.", form: ["Keep a straight line from head to heels.", "Engage your core and glutes."], muscles: { primary: "Core (Abs, Obliques)", secondary: "Back, Shoulders" }, mistakes: ["Hips sagging or rising too high."]},
+            "Side Plank": { description: "Targets the obliques and improves core stability.", form: ["Stack your feet or place one in front of the other.", "Lift your hips off the floor, forming a straight line."], muscles: { primary: "Obliques", secondary: "Core, Glutes" }, mistakes: ["Hips dropping towards the floor."]},
+            "Glute Bridge": { description: "Strengthens the glutes and hamstrings.", form: ["Lie on your back, knees bent, feet flat on the floor.", "Lift your hips, squeezing your glutes at the top."], muscles: { primary: "Glutes", secondary: "Hamstrings, Core" }, mistakes: ["Overextending the back."]},
+            "Dumbbell Deadlifts": { description: "A full-body movement that builds strength, particularly in the posterior chain.", form: ["Keep your back straight and chest up.", "Hinge at the hips, keeping the dumbbells close to your legs.", "Drive through your heels to stand up."], muscles: { primary: "Hamstrings, Glutes, Back", secondary: "Core, Legs" }, mistakes: ["Rounding the lower back."] },
+            "Bodyweight Squats": { description: "A fundamental lower body exercise that targets quads, hamstrings, and glutes.", form: ["Feet shoulder-width apart, chest up.", "Lower your hips as if sitting in a chair, keeping your back straight.", "Go as low as you can comfortably, then drive back up."], muscles: { primary: "Quads, Glutes", secondary: "Hamstrings, Core" }, mistakes: ["Knees caving inward.", "Leaning too far forward."] },
+            "Step-Ups": { description: "A unilateral exercise that improves leg strength and balance.", form: ["Step onto a bench or platform with one foot.", "Drive through the heel of the front foot to lift your body up.", "Step down slowly and repeat."], muscles: { primary: "Quads, Glutes", secondary: "Hamstrings" }, mistakes: ["Pushing off with the back foot too much."] },
+            "Dumbbell Rows": { description: "Builds a strong back by targeting the lats and rhomboids.", form: ["Hinge at your hips, keeping your back straight.", "Pull the dumbbell towards your hip, squeezing your back muscles.", "Lower the weight with control."], muscles: { primary: "Back (Lats, Rhomboids)", secondary: "Biceps" }, mistakes: ["Using momentum to lift the weight.", "Rounding the back."] },
+            "Deadlifts": { description: "The king of lifts, building immense full-body strength.", form: ["Start with the barbell over your midfoot.", "Keep a neutral spine and chest up.", "Drive the floor away with your legs to lift the bar."], muscles: { primary: "Posterior Chain (Glutes, Hamstrings, Back)", secondary: "Full Body" }, mistakes: ["Rounding the back is the most common and dangerous mistake."] },
+            "Forward Lunges": { description: "Improves lower body strength, balance, and flexibility.", form: ["Step forward with one leg, lowering your hips until both knees are bent at a 90-degree angle.", "Push off the front foot to return to the start."], muscles: { primary: "Quads, Glutes", secondary: "Hamstrings" }, mistakes: ["Front knee going past the toe.", "Losing balance."] },
+            "Bulgarian Split Squats": { description: "An advanced unilateral squat variation that heavily targets the quads and glutes.", form: ["Place the top of your back foot on a bench.", "Lower your body until your front thigh is parallel to the ground.", "Keep your torso upright."], muscles: { primary: "Quads, Glutes", secondary: "Hamstrings" }, mistakes: ["Leaning too far forward or backward."] },
+            "Standing Calf Raises": { description: "Isolates and strengthens the calf muscles.", form: ["Stand with the balls of your feet on an elevated surface.", "Lower your heels as far as possible, then press up as high as you can."], muscles: { primary: "Calves", secondary: "" }, mistakes: ["Using momentum or not using a full range of motion."] },
+            "Sprints": { description: "A form of high-intensity interval training (HIIT) that boosts metabolism and cardiovascular fitness.", form: ["Run at maximum effort for the 'on' period.", "Rest completely during the 'rest' period."], muscles: { primary: "Legs, Glutes, Core", secondary: "Full Body" }, mistakes: ["Not warming up properly."] },
+            "Burpees": { description: "A full-body conditioning exercise that combines a squat, push-up, and jump.", form: ["Perform each component of the movement with good form.", "Keep your core engaged throughout."], muscles: { primary: "Full Body", secondary: "" }, mistakes: ["Sagging hips during the plank/push-up phase."] },
+            "Jump Squats": { description: "A plyometric exercise that builds lower body power and explosiveness.", form: ["Perform a regular squat, then explode upwards into a jump.", "Land softly and immediately go into the next rep."], muscles: { primary: "Quads, Glutes, Hamstrings", secondary: "Calves" }, mistakes: ["Landing with stiff legs."] },
+            "Kettlebell Swings": { description: "A powerful hip-hinge movement that builds explosive power, strength, and endurance.", form: ["The power comes from a sharp hip thrust, not from lifting with the arms.", "Keep your back straight and core braced."], muscles: { primary: "Glutes, Hamstrings, Hips", secondary: "Core, Back" }, mistakes: ["Squatting the weight up instead of hinging.", "Lifting with the arms and shoulders."] }
+        },
+        nutrition: {
+            basics: `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                    <div>
+                        <h4 class="text-lg font-bold mb-2">Daily Macronutrients</h4>
+                        <p class="mb-1"><b>Protein:</b> 1.6–2 g/kg body weight. Essential for muscle repair.</p>
+                        <p class="mb-1"><b>Carbs:</b> 3–5 g/kg body weight. Your body's primary energy source.</p>
+                        <p class="mb-4"><b>Fats:</b> 0.8–1 g/kg body weight. Crucial for hormone function.</p>
+                        <h4 class="text-lg font-bold mt-4 mb-2">Key Food Sources</h4>
+                        <ul class="list-disc list-inside space-y-1">
+                            <li><b>Protein:</b> chicken, fish, lentils, oats, rice, nuts, olive oil.</li>
+                            <li><b>Carbs:</b> oats, rice, whole wheat bread, sweet potatoes, fruits.</li>
+                            <li><b>Fats:</b> nuts, seeds, avocado, olive oil.</li>
+                        </ul>
+                         <h4 class="text-lg font-bold mt-4 mb-2">💧 Hydration</h4>
+                        <p>Aim for 2.5–3 Liters of water per day.</p>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="macroChart"></canvas>
+                    </div>
+                </div>`,
+            supplements: `
+                <h4 class="text-lg font-bold mb-4">Common & Effective Supplements</h4>
+                <ul class="space-y-3">
+                    <li><b>Protein Powder:</b> A convenient way to increase your daily protein intake, especially post-workout for recovery.</li>
+                    <li><b>Creatine:</b> One of the most studied supplements, proven to increase strength, power, and muscle mass.</li>
+                    <li><b>Omega-3:</b> Healthy fats, often from fish oil, that support joint, heart, and brain health.</li>
+                    <li><b>Multivitamin:</b> Acts as a "micronutrient insurance policy" to fill any gaps in your diet.</li>
+                    <li><b>Caffeine:</b> Can improve energy, focus, and performance when taken before a workout.</li>
+                </ul>`,
+            mealplan: `
+                <h4 class="text-lg font-bold mb-4">Sample 1-Day Eating Timeline</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead><tr class="bg-gray-100"><th class="p-3">Time</th><th class="p-3">Meal</th></tr></thead>
+                        <tbody>
+                            <tr class="border-b"><td class="p-3 font-semibold">Breakfast (8:00)</td><td class="p-3">Oats + whey + banana</td></tr>
+                            <tr class="border-b"><td class="p-3 font-semibold">Snack (11:00)</td><td class="p-3">Greek yogurt + almonds</td></tr>
+                            <tr class="border-b"><td class="p-3 font-semibold">Lunch (13:30)</td><td class="p-3">Chicken + rice + vegetables</td></tr>
+                            <tr class="border-b"><td class="p-3 font-semibold">Snack (16:30)</td><td class="p-3">Apple + peanut butter</td></tr>
+                            <tr><td class="p-3 font-semibold">Dinner (19:30)</td><td class="p-3">Salmon/lentils + quinoa + salad</td></tr>
+                        </tbody>
+                    </table>
+                </div>`
+        }
+    };
+
+    const contentSections = document.querySelectorAll('.content-section');
+    const navLinks = document.querySelectorAll('.nav-item');
+    let macroChartInstance = null;
+    let db;
+    let auth;
+    let userId = 'anonymous';
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    async function initFirebase() {
+        if (!firebaseConfig || Object.keys(firebaseConfig).length === 0) {
+            console.error("Firebase config is missing.");
+            return;
+        }
+        try {
+            const app = firebase.initializeApp(firebaseConfig);
+            db = firebase.getFirestore(app);
+            auth = firebase.getAuth(app);
+            
+            await new Promise(resolve => {
+                const unsubscribe = firebase.onAuthStateChanged(auth, user => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('user-id').textContent = userId;
+                        renderTrackerTables();
+                        loadDashboardStats();
+                        unsubscribe();
+                        resolve();
+                    }
+                });
+            });
+
+            if (initialAuthToken) {
+                await firebase.signInWithCustomToken(auth, initialAuthToken);
+            } else {
+                await firebase.signInAnonymously(auth);
+            }
+
+        } catch (error) {
+            console.error("Firebase initialization failed:", error);
+        }
+    }
+    
+    function navigateTo(page) {
+        contentSections.forEach(section => {
+            section.classList.remove('active');
+            if (section.id === page) {
+                section.classList.add('active');
+            }
+        });
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.dataset.page === page) {
+                link.classList.add('active');
+            }
+        });
+    }
+
+    function setupNavigation() {
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = e.currentTarget.dataset.page;
+                navigateTo(page);
+            });
+        });
+    }
+    
+    function initDashboard() {
+        const today = new Date().getDay();
+        const currentDayIndex = today === 0 ? 6 : today - 1; 
+        const todayData = appData.schedule[currentDayIndex];
+        
+        document.getElementById('today-title').textContent = `Today's Focus: Day ${todayData.day} - ${todayData.title}`;
+        const workoutList = document.getElementById('today-workout-list');
+        workoutList.innerHTML = todayData.exercises.map(ex => `<li>${ex}</li>`).join('');
+    }
+
+    function initWorkoutSchedule() {
+        const grid = document.getElementById('workout-grid');
+        grid.innerHTML = appData.schedule.map(day => `
+            <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer workout-card" data-day="${day.day}">
+                <p class="text-sm font-semibold text-red-500">Day ${day.day}</p>
+                <h3 class="text-xl font-bold">${day.title}</h3>
+                <p class="text-gray-600 mb-3">${day.subtitle}</p>
+                <div class="workout-details hidden text-sm text-gray-700">
+                    <ul class="list-disc list-inside space-y-1 mt-2">
+                        ${day.exercises.map(ex => `<li>${ex}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `).join('');
+        
+        document.querySelectorAll('.workout-card').forEach(card => {
+           card.addEventListener('click', () => {
+               const details = card.querySelector('.workout-details');
+               details.classList.toggle('hidden');
+           }) 
+        });
+    }
+
+    function initExerciseLibrary() {
+        const list = document.getElementById('exercise-list');
+        list.innerHTML = Object.keys(appData.exercises).map(name => `
+            <li><a href="#" class="block p-2 rounded-md hover:bg-gray-100 text-sm exercise-link" data-exercise="${name}">${name}</a></li>
+        `).join('');
+
+        document.querySelectorAll('.exercise-link').forEach(link => {
+            link.addEventListener('click', e => {
+                e.preventDefault();
+                const exerciseName = e.target.dataset.exercise;
+                renderExerciseDetails(exerciseName);
+                
+                document.querySelectorAll('.exercise-link').forEach(l => l.classList.remove('bg-red-100', 'font-bold'));
+                e.target.classList.add('bg-red-100', 'font-bold');
+
+            });
+        });
+    }
+
+    function renderExerciseDetails(name) {
+        const details = appData.exercises[name];
+        const container = document.getElementById('exercise-details');
+        if (!details) { container.innerHTML = '<p>Exercise not found.</p>'; return; }
+        
+        container.innerHTML = `
+            <h3 class="text-2xl font-bold mb-3">${name}</h3>
+            <p class="mb-4">${details.description}</p>
+            
+            ${details.form.length > 0 ? `
+            <div class="mb-4 p-4 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg">
+                <h4 class="font-bold mb-2">📋 Form & Stance</h4>
+                <ul class="list-disc list-inside space-y-1 text-sm">
+                    ${details.form.map(f => `<li>${f}</li>`).join('')}
+                </ul>
+            </div>` : ''}
+
+            <div class="mb-4">
+                <h4 class="font-bold mb-2">💪 Muscles Worked</h4>
+                <p class="text-sm"><span class="text-red-600 font-semibold">🔴 Primary:</span> ${details.muscles.primary}</p>
+                ${details.muscles.secondary ? `<p class="text-sm"><span class="text-orange-500 font-semibold">🟠 Secondary:</span> ${details.muscles.secondary}</p>` : ''}
+            </div>
+
+            ${details.mistakes.length > 0 ? `
+            <div class="p-4 bg-red-50 border-l-4 border-red-400 rounded-r-lg">
+                <h4 class="font-bold mb-2">❌ Common Mistakes</h4>
+                <ul class="list-disc list-inside space-y-1 text-sm">
+                     ${details.mistakes.map(m => `<li>${m}</li>`).join('')}
+                </ul>
+            </div>` : ''}
+        `;
+    }
+
+    function setupNutritionTabs() {
+        document.querySelectorAll('.nutrition-tab').forEach(tab => {
+            tab.addEventListener('click', e => {
+                renderNutritionContent(e.target.dataset.tab);
+            });
+        });
+    }
+
+    function renderNutritionContent(tabName) {
+        document.querySelectorAll('.nutrition-tab').forEach(t => {
+            t.classList.remove('border-red-500', 'text-red-500');
+            t.classList.add('text-gray-500', 'border-transparent');
+        });
+        const activeTab = document.querySelector(`.nutrition-tab[data-tab="${tabName}"]`);
+        activeTab.classList.add('border-red-500', 'text-red-500');
+        activeTab.classList.remove('text-gray-500', 'border-transparent');
+
+        const contentContainer = document.getElementById('nutrition-content');
+        contentContainer.innerHTML = appData.nutrition[tabName];
+
+        if (tabName === 'basics') {
+            createMacroChart();
+        }
+    }
+    
+    function createMacroChart() {
+        if(macroChartInstance) {
+            macroChartInstance.destroy();
+        }
+        const ctx = document.getElementById('macroChart').getContext('2d');
+        macroChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Protein', 'Carbohydrates', 'Fats'],
+                datasets: [{
+                    label: 'Macro Split',
+                    data: [30, 45, 25], 
+                    backgroundColor: ['#EF4444', '#F97316', '#FBBF24'],
+                    borderColor: '#FFFFFF',
+                    borderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed !== null) {
+                                    label += context.parsed + '%';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderTrackerTables(weeklyData = [], monthlyData = {}) {
+        const weeklyBody = document.getElementById('weekly-tracker-body');
+        const monthlyBody = document.getElementById('monthly-tracker-body');
+
+        weeklyBody.innerHTML = '';
+        const todayExercises = appData.schedule[new Date().getDay() - 1]?.exercises || [];
+        todayExercises.forEach((ex, index) => {
+            const row = document.createElement('tr');
+            row.className = index % 2 === 0 ? 'bg-gray-50' : '';
+            const existingEntry = weeklyData.find(entry => entry.exercise === ex);
+            row.innerHTML = `
+                <td class="p-2">${ex}</td>
+                <td class="p-2"><input type="text" class="w-full bg-transparent outline-none border-b border-gray-300 focus:border-red-500" data-exercise="${ex}" data-field="sets" value="${existingEntry?.sets || ''}"></td>
+                <td class="p-2"><input type="text" class="w-full bg-transparent outline-none border-b border-gray-300 focus:border-red-500" data-exercise="${ex}" data-field="reps" value="${existingEntry?.reps || ''}"></td>
+                <td class="p-2"><input type="text" class="w-full bg-transparent outline-none border-b border-gray-300 focus:border-red-500" data-exercise="${ex}" data-field="weight" value="${existingEntry?.weight || ''}"></td>
+                <td class="p-2"><input type="text" class="w-full bg-transparent outline-none border-b border-gray-300 focus:border-red-500" data-exercise="${ex}" data-field="notes" value="${existingEntry?.notes || ''}"></td>
+            `;
+            weeklyBody.appendChild(row);
+        });
+
+        monthlyBody.innerHTML = '';
+        const metrics = ["Weight (kg)", "Body Fat %", "Chest (cm)", "Waist (cm)", "Arms (cm)", "Legs (cm)", "Best lifts (kg)", "Energy/Sleep"];
+        metrics.forEach((metric, index) => {
+            const row = document.createElement('tr');
+            row.className = 'border-b';
+            const metricKey = metric.split(' ')[0].toLowerCase();
+            row.innerHTML = `
+                <td class="p-2 font-semibold">${metric}</td>
+                <td class="p-2"><input type="text" class="w-full bg-transparent outline-none" data-month="1" data-metric="${metricKey}" value="${monthlyData?.month1?.[metricKey] || ''}"></td>
+                <td class="p-2"><input type="text" class="w-full bg-transparent outline-none" data-month="2" data-metric="${metricKey}" value="${monthlyData?.month2?.[metricKey] || ''}"></td>
+                <td class="p-2"><input type="text" class="w-full bg-transparent outline-none" data-month="3" data-metric="${metricKey}" value="${monthlyData?.month3?.[metricKey] || ''}"></td>
+            `;
+            monthlyBody.appendChild(row);
+        });
+    }
+
+    async function loadTrackerData() {
+        if (!db || !userId) return;
+        const weeklyRef = firebase.doc(db, `artifacts/${appId}/users/${userId}/trackers`, 'weekly');
+        const monthlyRef = firebase.doc(db, `artifacts/${appId}/users/${userId}/trackers`, 'monthly');
+
+        firebase.onSnapshot(weeklyRef, (docSnap) => {
+            const weeklyData = docSnap.exists() ? docSnap.data().workouts : [];
+            const monthlyDocSnap = getDoc(monthlyRef);
+            monthlyDocSnap.then(monthlySnap => {
+                const monthlyData = monthlySnap.exists() ? monthlySnap.data() : {};
+                renderTrackerTables(weeklyData, monthlyData);
+            }).catch(e => console.error("Error loading monthly data:", e));
+        }, (error) => console.error("Error loading weekly data:", error));
+
+        firebase.onSnapshot(monthlyRef, (docSnap) => {
+            const monthlyData = docSnap.exists() ? docSnap.data() : {};
+            const weeklyDocSnap = getDoc(weeklyRef);
+            weeklyDocSnap.then(weeklySnap => {
+                const weeklyData = weeklySnap.exists() ? weeklySnap.data().workouts : [];
+                renderTrackerTables(weeklyData, monthlyData);
+            }).catch(e => console.error("Error loading weekly data:", e));
+        }, (error) => console.error("Error loading monthly data:", error));
+    }
+
+    async function loadDashboardStats() {
+         if (!db || !userId) return;
+         const weeklyRef = firebase.doc(db, `artifacts/${appId}/users/${userId}/trackers`, 'weekly');
+         const monthlyRef = firebase.doc(db, `artifacts/${appId}/users/${userId}/trackers`, 'monthly');
+
+         const weeklyDocSnap = await firebase.getDoc(weeklyRef);
+         const monthlyDocSnap = await firebase.getDoc(monthlyRef);
+
+         const lastWorkoutSummary = document.getElementById('last-workout-summary');
+         const monthlyProgressSummary = document.getElementById('monthly-progress-summary');
+
+         if (weeklyDocSnap.exists() && weeklyDocSnap.data().workouts.some(w => w.sets || w.reps || w.weight || w.notes)) {
+             const weeklyData = weeklyDocSnap.data().workouts;
+             let html = `<h3 class="text-xl font-bold mb-4">📝 Last Workout Summary</h3><ul class="space-y-2">`;
+             weeklyData.forEach(item => {
+                 if (item.sets || item.reps || item.weight) {
+                     html += `<li class="text-sm"><b>${item.exercise}</b>: Sets: ${item.sets || '-'}, Reps: ${item.reps || '-'}, Weight: ${item.weight || '-'}kg</li>`;
+                 }
+             });
+             html += `</ul>`;
+             lastWorkoutSummary.innerHTML = html;
+         } else {
+             lastWorkoutSummary.innerHTML = `<h3 class="text-xl font-bold mb-4">📝 Last Workout Summary</h3><p class="text-gray-500 text-sm">Log your first workout to see a summary here.</p>`;
+         }
+
+         if (monthlyDocSnap.exists() && Object.keys(monthlyDocSnap.data()).some(key => monthlyDocSnap.data()[key].month3)) {
+             const monthlyData = monthlyDocSnap.data();
+             const metrics = [
+                 { key: 'weight', label: 'Weight' },
+                 { key: 'body', label: 'Body Fat %' },
+                 { key: 'chest', label: 'Chest' },
+                 { key: 'waist', label: 'Waist' },
+                 { key: 'arms', label: 'Arms' },
+                 { key: 'legs', label: 'Legs' },
+                 { key: 'best', label: 'Best Lifts' },
+                 { key: 'energy', label: 'Energy/Sleep' }
+             ];
+             let html = `<h3 class="text-xl font-bold mb-4">📈 Monthly Progress</h3><ul class="space-y-2">`;
+             metrics.forEach(metric => {
+                 const value = monthlyData[metric.key]?.month3;
+                 if (value) {
+                     html += `<li class="text-sm"><b>${metric.label}</b>: ${value}</li>`;
+                 }
+             });
+             html += `</ul>`;
+             monthlyProgressSummary.innerHTML = html;
+         } else {
+             monthlyProgressSummary.innerHTML = `<h3 class="text-xl font-bold mb-4">📈 Monthly Progress</h3><p class="text-gray-500 text-sm">Enter your monthly stats to see them here.</p>`;
+         }
+    }
+    
+    async function saveTrackerData() {
+        if (!db || !userId) {
+            console.error("Database not initialized or user not authenticated.");
+            return;
+        }
+
+        const weeklyData = [];
+        document.querySelectorAll('#weekly-tracker-body tr').forEach(row => {
+            const exercise = row.cells[0].textContent;
+            const sets = row.querySelector('[data-field="sets"]').value;
+            const reps = row.querySelector('[data-field="reps"]').value;
+            const weight = row.querySelector('[data-field="weight"]').value;
+            const notes = row.querySelector('[data-field="notes"]').value;
+            weeklyData.push({ exercise, sets, reps, weight, notes });
+        });
+
+        const monthlyData = {};
+        document.querySelectorAll('#monthly-tracker-body tr').forEach(row => {
+            const metricKey = row.cells[0].querySelector('input').dataset.metric;
+            monthlyData[metricKey] = {
+                month1: row.querySelector('[data-month="1"]').value,
+                month2: row.querySelector('[data-month="2"]').value,
+                month3: row.querySelector('[data-month="3"]').value
+            };
+        });
+
+        const weeklyRef = firebase.doc(db, `artifacts/${appId}/users/${userId}/trackers`, 'weekly');
+        const monthlyRef = firebase.doc(db, `artifacts/${appId}/users/${userId}/trackers`, 'monthly');
+
+        try {
+            await firebase.setDoc(weeklyRef, { workouts: weeklyData }, { merge: true });
+            await firebase.setDoc(monthlyRef, monthlyData, { merge: true });
+            const saveMessage = document.getElementById('save-message');
+            saveMessage.classList.add('visible');
+            setTimeout(() => saveMessage.classList.remove('visible'), 2000);
+            loadDashboardStats();
+        } catch (e) {
+            console.error("Error saving documents: ", e);
+        }
+    }
+    
+    document.getElementById('save-button').addEventListener('click', saveTrackerData);
+
+    document.getElementById('copy-user-id').addEventListener('click', () => {
+        navigator.clipboard.writeText(userId).then(() => {
+        }).catch(err => {
+            console.error('Could not copy text: ', err);
+        });
+    });
+
+    const initialPage = 'dashboard';
+    navigateTo(initialPage);
+    
+    initDashboard();
+    initWorkoutSchedule();
+    initExerciseLibrary();
+    setupNutritionTabs();
+    setupNavigation();
+    initFirebase();
+});
+</script>
+</body>
+</html>
