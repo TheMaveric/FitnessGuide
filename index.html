@@ -31,8 +31,17 @@
             background-color: #EF4444;
             color: white;
         }
-        .content-section { display: none; }
-        .content-section.active { display: block; }
+        .content-section {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+        .content-section.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         .chart-container {
             position: relative;
@@ -59,7 +68,7 @@
         .video-container {
             position: relative;
             width: 100%;
-            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            padding-bottom: 56.25%;
             height: 0;
             overflow: hidden;
             border-radius: 0.5rem;
@@ -72,6 +81,11 @@
             left: 0;
             width: 100%;
             height: 100%;
+        }
+
+        .card-animation:hover {
+            transform: translateY(-5px);
+            transition: transform 0.3s ease-in-out;
         }
         
     </style>
@@ -129,6 +143,12 @@
                     <h3 class="text-xl font-bold mb-4">📊 Weight Progress</h3>
                     <div class="chart-container">
                         <canvas id="weightProgressChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md mt-6">
+                    <h3 class="text-xl font-bold mb-4">🗓️ Workout Consistency</h3>
+                    <div class="chart-container">
+                        <canvas id="workoutConsistencyChart"></canvas>
                     </div>
                 </div>
 
@@ -205,7 +225,7 @@
                 </div>
                 <div class="mt-8 flex justify-end items-center space-x-4">
                     <p id="save-message" class="text-sm font-semibold text-green-600 success-message">Progress saved!</p>
-                    <button id="save-button" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition-colors">Save Progress</button>
+                    <button id="save-button" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition-colors card-animation">Save Progress</button>
                 </div>
             </section>
 
@@ -217,7 +237,7 @@
                     <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
                         <input type="number" id="target-weight-input" placeholder="e.g., 75" class="w-full sm:w-auto p-2 rounded-lg border-2 border-gray-300 focus:outline-none focus:border-red-500">
                         <span class="text-gray-600">kg</span>
-                        <button id="save-goal-button" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition-colors">Save Goal</button>
+                        <button id="save-goal-button" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition-colors card-animation">Save Goal</button>
                     </div>
                     <div id="goal-summary" class="mt-6 p-4 rounded-lg border-l-4 border-red-400 bg-red-50">
                         <p class="text-gray-700">You haven't set a goal yet. Enter your target weight above!</p>
@@ -230,7 +250,7 @@
                 <p class="text-lg text-gray-600 mb-6">Our AI analyzes your progress and goals to generate a personalized workout plan. Click below to get a new plan designed just for you.</p>
                 <div class="bg-white p-6 rounded-lg shadow-md">
                     <h3 class="text-xl font-bold mb-4">💡 Generate a New Plan</h3>
-                    <button id="generate-plan-button" class="bg-gray-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-600 transition-colors">Generate Plan</button>
+                    <button id="generate-plan-button" class="bg-gray-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-600 transition-colors card-animation">Generate Plan</button>
                     <div id="plan-loading" class="mt-6 hidden">
                         <div class="w-full bg-gray-200 rounded-full h-2.5">
                             <div id="plan-progress" class="bg-red-600 h-2.5 rounded-full" style="width: 0%"></div>
@@ -483,6 +503,7 @@ class App {
         this.navLinks = document.querySelectorAll('.nav-item');
         this.macroChartInstance = null;
         this.weightChartInstance = null;
+        this.consistencyChartInstance = null;
         this.db = null;
         this.auth = null;
         this.userId = 'anonymous';
@@ -490,6 +511,45 @@ class App {
         this.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         this.firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         this.initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        this.generatedPlans = [
+            {
+                title: "High-Volume Strength",
+                exercises: [
+                    "Warm-up with 5 minutes of light cardio and dynamic stretches.",
+                    "Barbell Squats: 4 sets of 8-10 reps. Focus on depth and form.",
+                    "Incline Dumbbell Press: 3 sets of 10-12 reps.",
+                    "Pull-Ups (or Lat Pulldowns): 3 sets to failure.",
+                    "Leg Press: 3 sets of 12-15 reps.",
+                    "Tricep Pushdowns: 3 sets of 15 reps.",
+                    "Finish with 15 minutes of cool-down stretching."
+                ]
+            },
+            {
+                title: "Full-Body Power",
+                exercises: [
+                    "Warm-up with 5 minutes of jumping jacks and high knees.",
+                    "Deadlifts: 3 sets of 5 reps. Focus on explosive hip drive.",
+                    "Overhead Press: 3 sets of 8 reps.",
+                    "Pendlay Rows: 3 sets of 8 reps.",
+                    "Box Jumps: 3 sets of 10 reps.",
+                    "Plank: 3 sets of 60 seconds.",
+                    "Cool-down with static stretches."
+                ]
+            },
+            {
+                title: "Metabolic Conditioning",
+                exercises: [
+                    "Warm-up with a 5-minute jog.",
+                    "Perform 5 rounds for time:",
+                    " - 15 Kettlebell Swings",
+                    " - 10 Burpees",
+                    " - 15 Box Jumps",
+                    "Rest 90 seconds between rounds.",
+                    "Cool-down with light stretching."
+                ]
+            }
+        ];
     }
 
     async init() {
@@ -503,9 +563,16 @@ class App {
         document.getElementById('save-button').addEventListener('click', () => this.saveTrackerData());
         document.getElementById('save-goal-button').addEventListener('click', () => this.saveGoal());
         document.getElementById('copy-user-id').addEventListener('click', () => {
-            navigator.clipboard.writeText(this.userId).then(() => {}).catch(err => {
-                console.error('Could not copy text: ', err);
-            });
+            document.execCommand('copy');
+        });
+        document.getElementById('copy-user-id').addEventListener('click', () => {
+             const userIdSpan = document.getElementById('user-id');
+             const userIdText = userIdSpan.textContent;
+             navigator.clipboard.writeText(userIdText).then(() => {
+                 console.log('User ID copied to clipboard!');
+             }).catch(err => {
+                 console.error('Failed to copy user ID: ', err);
+             });
         });
         this.navigateTo('dashboard');
     }
@@ -545,10 +612,8 @@ class App {
     navigateTo(page) {
         this.contentSections.forEach(section => {
             section.classList.remove('active');
-            if (section.id === page) {
-                section.classList.add('active');
-            }
         });
+        document.getElementById(page).classList.add('active');
         this.navLinks.forEach(link => {
             link.classList.remove('active');
             if (link.dataset.page === page) {
@@ -592,7 +657,7 @@ class App {
     initWorkoutSchedule() {
         const grid = document.getElementById('workout-grid');
         grid.innerHTML = this.appData.schedule.map(day => `
-            <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer workout-card" data-day="${day.day}">
+            <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer workout-card card-animation" data-day="${day.day}">
                 <p class="text-sm font-semibold text-red-500">Day ${day.day}</p>
                 <h3 class="text-xl font-bold">${day.title}</h3>
                 <p class="text-gray-600 mb-3">${day.subtitle}</p>
@@ -863,7 +928,7 @@ class App {
 
         const monthlyData = {};
         document.querySelectorAll('#monthly-tracker-body tr').forEach(row => {
-            const metricKey = row.cells[0].textContent.split(' ')[0].toLowerCase();
+            const metricKey = row.querySelector('[data-metric]').dataset.metric;
             monthlyData[metricKey] = {
                 month1: row.querySelector('[data-month="1"]').value,
                 month2: row.querySelector('[data-month="2"]').value,
@@ -933,6 +998,8 @@ class App {
         const loadingDiv = document.getElementById('plan-loading');
         const progressDiv = document.getElementById('plan-progress');
         const planDiv = document.getElementById('generated-plan');
+        const planTitle = planDiv.querySelector('h4');
+        const planList = planDiv.querySelector('ul');
 
         generateButton.addEventListener('click', () => {
             loadingDiv.classList.remove('hidden');
@@ -949,6 +1016,10 @@ class App {
                     loadingDiv.classList.add('hidden');
                     planDiv.classList.remove('hidden');
                     generateButton.disabled = false;
+                    
+                    const randomPlan = this.generatedPlans[Math.floor(Math.random() * this.generatedPlans.length)];
+                    planTitle.textContent = `Generated Plan: ${randomPlan.title}`;
+                    planList.innerHTML = randomPlan.exercises.map(ex => `<li>${ex}</li>`).join('');
                 }
             }, 200);
         });
@@ -1019,6 +1090,36 @@ class App {
             tab.addEventListener('click', e => {
                 this.renderNutritionContent(e.target.dataset.tab);
             });
+        });
+    }
+
+    createConsistencyChart(labels, data) {
+        if(this.consistencyChartInstance) {
+            this.consistencyChartInstance.destroy();
+        }
+        const ctx = document.getElementById('workoutConsistencyChart').getContext('2d');
+        this.consistencyChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Workouts per Week',
+                    data: data,
+                    backgroundColor: '#F97316',
+                    borderColor: '#E65100',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        stepSize: 1
+                    }
+                }
+            }
         });
     }
 }
